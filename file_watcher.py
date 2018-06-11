@@ -79,8 +79,8 @@ class Watcher(object):
         :param seek: the point to file we last read stop at.
         :return:no sense for now
         """
-        print(file_name)
-        some = file_name.replace('\\', '-').replace(':', '-')
+
+        some = file_name.replace('/', '-').replace(':', '-')
         journey_file = os.sep.join([self.logstreamer, self.item + "-(" + some + ')' + self.ext])
 
         if os.path.exists(journey_file) and seek == 0:
@@ -105,23 +105,17 @@ class Watcher(object):
         self.logstreamer = "read_recorder"
         base_name = os.path.basename(file_name)
         log.debug(file_name)
-        some = file_name.replace('\\', '-').replace(':', '-')
+        some = file_name.replace('/', '-').replace(':', '-')
         log.debug(self.item)
         log.debug(some)
-        fn = os.sep.join([self.logstreamer, self.item + "-(" + some + ')' + self.ext])
-        log.debug(fn)
-        if os.path.exists(fn):
-            with open(fn, "r") as fileh:
+        fn = os.sep.join([self.logstreamer,self.item + "-(" + some  + ')' + self.ext])
 
-                log.debug(fileh.tell())
-                
+        if os.path.exists(fn):
+
+            with open(fn, "r") as fileh:
                 fileh.seek(0)
-                
-                log.debug(fileh.tell())
-                location =  fileh.read()
-                journey_dict = json.loads(location)
-                return journey_dict["seek"]
-            
+                journey_dict = json.loads(fileh.read())
+            return journey_dict["seek"]
         else:
             self.set_seek(file_name, 0)
             return 0
@@ -173,13 +167,14 @@ class Watcher(object):
                     continue
                 else:
                     task_ralated = (filename, self.task_infomation)
-                    process_rtn, info, influx_json = self.processer.message_process(message, task_ralated,self.measurement, )
+                    process_rtn, info, influx_json = self.processer.message_process(message, task_ralated,
+                                                                                    self.measurement, )
                     if process_rtn == 1:
                         log.error(info)
                         self.send(influx_json, method=self.output)
-                        # # for debuging use
+                        # for debuging use
                         # with open('D:\work\work_stuff\log\mts\something_wrong.txt', 'a') as f:
-                        #   f.write(message+'\n'+filename+'\n-----------------\n')
+                        #     f.write(message+'\n'+filename+'\n-----------------\n')
 
                     if process_rtn == 0:
                         influx_json['tags'].update(self.user_tag)
@@ -188,9 +183,10 @@ class Watcher(object):
                     if process_rtn == 2:
                         pass
                 present += len(line)
-                    #log.debug(present_point)
-                self.set_seek(filename,present)
-                log.debug(self.get_seek(filename))
+                if present > os.stat(filename)[6]:
+                    self.set_seek(filename,0)
+                else:
+                    self.set_seek(filename,present)
 
     def watch(self):
         """读log日志，分行交给processor处理
@@ -217,32 +213,27 @@ class Watcher(object):
         :return:the contents we don't process.
         """
         fn = filename
-
         file_size = os.stat(filename)[6]
 
         present_point = self.get_seek(fn)
 
-        log.debug(present_point)
-
-        # present_point = 0  # FIXME:this is for debuging !!!
+        #present_point = 0  # FIXME:this is for debuging !!!
         if file_size == present_point:
             log.debug('file_size = present_point')
             return 'pass'
+
         if version_info[0] == 2:
             with codecs.open(filename, 'r', errors='ignore') as for_read:
                 for_read.seek(present_point)
-                present_point = for_read.tell()
-                log.debug(present_point)
                 contents = for_read.read(file_size - present_point)
         else:
             with open(filename, 'r', errors='ignore') as for_read:
                 for_read.seek(present_point)
-                log.debug(for_read.tell())
                 contents = for_read.read(file_size - present_point)
+
         #present_point = file_size
-        #log.debug(present_point)
-        #self.set_seek(fn, present_point)
-        
+        # self.set_seek(fn, present_point)
+
         return contents
 
     def filter(self, files):
